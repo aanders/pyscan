@@ -1,4 +1,7 @@
+#!/usr/bin/env python3
+
 import argparse
+import datetime
 import os
 import sys
 
@@ -89,7 +92,7 @@ class PyScanUi:
     def config_to_text(self, width=80, indent=0):
         output = "Output directory: {}".format(self.directory)
         title = "Config: {}".format(self.config.get("_name", "<none>"))
-        lines = [output, title, '', self.config.get("_description", '')]
+        lines = [output, '', '\Zb' + title + '\Zn', self.config.get("_description", '')]
         for k, v in self.config.items():
             if k[0] == '_':
                 continue
@@ -102,12 +105,14 @@ class PyScanUi:
         text = self.config_to_text(width=42, indent=4)
         code = self.d.yesno(text,
                 title="Main Menu", extra_button=True, height=15, width=50,
-                ok_label="Scan", extra_label="Setup", cancel_label="Quit")
+                ok_label="Scan", extra_label="Setup", cancel_label="Quit", colors=True)
         return code
 
     def do_scan(self):
         filename = "Scan_{}.pdf".format(
                 datetime.datetime.now().strftime("%Y%m%d%H%M%S"))
+        self.d.msgbox("Not Implemented");
+        return
 
         if config is not None:
             for k, v in config.items():
