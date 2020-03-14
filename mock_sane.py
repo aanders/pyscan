@@ -23,10 +23,7 @@ class _SaneIterator:
             self.device.start()
             return self.device.snap(True)
         except Exception as e:
-            if str(e) == 'Document feeder out of documents':
-                raise StopIteration
-            else:
-                raise
+            raise StopIteration
 
 
 class SaneDev:
@@ -36,6 +33,8 @@ class SaneDev:
         self.mode = 'Color'
         self.page_height = 292
         self.resolution = 300
+        self.contrast = 0
+        self.source = 'ADF Front'
         self.page_loaded = 1
         self.scanner_model = ('Fujitsu', 'ScanSnap S300i')
         self._count = 0
@@ -48,8 +47,28 @@ class SaneDev:
             return self.page_height
         elif name == 'resolution':
             return self.resolution
+        elif name == 'contrast':
+            return self.contrast
+        elif name == 'source':
+            return self.source
         elif name == 'page_loaded':
             return self.page_loaded
+        else:
+            raise KeyError("No such option {}".format(name))
+
+    def __setitem__(self, name, val):
+        if name == 'mode':
+            self.mode = val
+        elif name == 'page_height':
+            self.page_height = val
+        elif name == 'resolution':
+            self.resolution = val
+        elif name == 'contrast':
+            self.contrast = val
+        elif name == 'source':
+            self.source = val
+        elif name == 'page_height':
+            self.page_height = val
         else:
             raise KeyError("No such option {}".format(name))
 
@@ -63,8 +82,11 @@ class SaneDev:
         pass
 
     def snap(self, no_cancel=False):
+        time.sleep(2)
         self._count += 1
-        return Image.read('image{}'.format(self._count))
+        if self._count > 5:
+            raise StopIteration
+        return Image.open('image{}'.format(self._count))
 
     def multi_scan(self):
         return _SaneIterator(self)

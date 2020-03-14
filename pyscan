@@ -2,16 +2,22 @@
 
 import argparse
 import datetime
+import glob
 import os
+import subprocess
 import sys
+import tempfile
 
 from inspect import cleandoc
-
-import mock_sane as sane
 
 from dialog import Dialog
 
 import toml
+
+import mock_sane as sane
+from mock_pil import Image
+
+# from PIL import Image
 
 sane.MOCK_NUM_DEVICES = 1
 class PyScanUi:
@@ -205,26 +211,30 @@ class PyScanUi:
     def do_scan(self):
         filename = "Scan_{}.pdf".format(
                 datetime.datetime.now().strftime("%Y%m%d%H%M%S"))
-        self.d.msgbox("Not Implemented");
-        return
 
-        if config is not None:
-            for k, v in config.items():
-                self.device[k] = v
+        for k, v in self.config.get("settings", dict()).items():
+            self.device[k] = v
         with tempfile.TemporaryDirectory() as tmpdir:
-            i = 0
+            i = 1
+            self.d.gauge_start("Scanning page {}".format(i))
             for img in self.device.multi_scan():
                 img.save(os.path.join(tmpdir, "out{}.pnm".format(i)))
                 i += 1
+                self.d.gauge_update(i, text="Scanning page {}".format(i),
+                        update_text=True)
+            self.d.gauge_update(100, text="Saving scanned images",
+                    update_text=True)
             # Collect the output files and combine into a single PDF
             files = sorted(glob.iglob(os.path.join(tmpdir, "*.pnm")))
-            if config and config.get("rotate_first"):
-                from PIL import Image # Only require this if actually needed
-                with Image.open(files[0]) as i:
-                    i.transpose(Image.ROTATE_180).save(files[0],
-                                                       format=i.format)
-            subprocess.run(('convert', '-density', '300', *files,
-                            os.path.join(self.directory, filename)), check=True)
+            if self.config.get("rotate_first"):
+                with Image.open(files[0]) as img:
+                    img.transpose(Image.ROTATE_180).save(files[0],
+                                                       format=img.format)
+            # subprocess.run(('convert', '-density', '300', *files,
+            #                 os.path.join(self.directory, filename)), check=True)
+            header = "The following {} been written to disk:".format(
+                    "file has" if i == 1 else "files have")
+            self.d.msgbox('\n'.join((header, "", *files)))
 
     def main_loop(self):
         while True:
