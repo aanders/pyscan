@@ -28,7 +28,6 @@ class PyScanUi:
         self.configs = args.config.get('scan_configs')
         self.config = next(iter(self.configs)) if self.configs else dict()
         self.directory = "."
-        self.filename = "FOO"
         self.format = "BAR"
 
     def banner(self):
@@ -95,24 +94,6 @@ class PyScanUi:
         elif code == Dialog.HELP:
             self.d.msgbox("DIRECTORY HELP")
 
-    def change_filename(self):
-        while True:
-            code, name = self.d.radiolist('Select the filename format',
-                    choices=(('Date & Time', 'Scan_YYYYMMDDHHMMSS.{}'.format(self.format.lower().split()[0]), self.filename == 'Date & Time'),
-                        ('Sequential Number', '000001.{}'.format(self.format.lower().split()[0]), self.filename == 'Sequential Number'),
-                        ('Custom Filename', self.filename if self.filename != 'Date & Time' and self.filename != 'Sequential Number' and self.filename != 'FOO' else '<unset>', self.filename != 'Date & Time' and self.filename != 'Sequential Number')))
-            if code == Dialog.OK:
-                if name == 'Custom Filename':
-                    code, name = self.d.inputbox('Enter the filename')
-                    if code == Dialog.OK:
-                        self.filename = name
-                    else:
-                        # go around again
-                        continue
-                else:
-                    self.filename = name
-            break
-
     def setup_menu(self):
         has_config = self.configs is not None
         choices = []
@@ -120,7 +101,6 @@ class PyScanUi:
             choices.append(('Config', 'Select scanning configuration'))
         choices.append(('Format', 'Select output format'))
         choices.append(('Directory', 'Select output directory'))
-        choices.append(('Filename', 'Select output filename'))
         while True:
             code, tag = self.d.menu("Setup Menu", choices=choices, ok_label="Select", cancel_label="Exit")
             if code == Dialog.OK:
@@ -130,8 +110,6 @@ class PyScanUi:
                     self.change_format()
                 elif tag == 'Directory':
                     self.change_directory()
-                elif tag == 'Filename':
-                    self.change_filename()
                 else:
                     # We should never get here; if we somehow do (maybe a bug
                     # in pythondialog), recover by returning to the main screen
@@ -143,9 +121,8 @@ class PyScanUi:
     def config_to_text(self, width=80, indent=0):
         output = "Output directory: {}".format(os.path.abspath(self.directory))
         sfmt = "Format: {}".format(self.format)
-        fname = "Filename: {}".format(self.filename)
         title = "Config: {}".format(self.config.get("_name", "<none>"))
-        lines = [output, fname, sfmt, '', '\Zb' + title + '\Zn', self.config.get("_description", '')]
+        lines = [output, sfmt, '', '\Zb' + title + '\Zn', self.config.get("_description", '')]
         for k, v in self.config.items():
             if k[0] == '_':
                 continue
