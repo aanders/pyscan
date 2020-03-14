@@ -14,20 +14,31 @@ from dialog import Dialog
 import toml
 
 sane.MOCK_NUM_DEVICES = 1
-
-class PyScanManager:
-    pass
-
 class PyScanUi:
 
     VERSION = "0.1.0"
     APP_NAME = "pyscan"
+
+    # Non-Breakable Space Character
+    # Dialog seems to like to collapse multiple space characters as part of
+    # its automatic text formatting/wrapping.  This messes with our attempts
+    # at manual indentation in some areas, so we use NBSP there instead.
+    NBSP = '\u00a0'
 
     def __init__(self, args):
         self.device = None
 
         self.d = Dialog()
         self.d.set_background_title(self.background_title())
+        # Dialog doesn't use the alternate screen by default (or even clear
+        # the screen afterwards), since each widget is actually a separate
+        # instance of the program.  This provides more fluid transitions
+        # between widgets, but clutters up the scrollback buffer immensely
+        # (e.g. when used inside tmux) If it's more desirable to have the
+        # terminal flicker back to the normal screen during every transition,
+        # dialog can be forced to use the alternate screen:
+        #
+        #   self.d.add_persistent_args(('--keep-tite',))
 
         self.configs = args.config.get('scan_config')
         self.config = next(iter(self.configs)) if self.configs else dict()
@@ -53,10 +64,12 @@ class PyScanUi:
 
     def select_scanner(self):
         sane_version = sane.init()
-        self.d.infobox("\nPlease wait, detecting scanners...", title="SANE Version {}.{}.{}".format(*sane_version))
+        self.d.infobox('\n\n'.join((
+            "[Sane Version {}.{}.{}]".format(*sane_version),
+            "Please wait, detecting scanners...")))
         devs = sane.get_devices()
         if len(devs) == 0:
-            self.d.msgbox("No scanners found!")
+            self.d.msgbox("No scanners found!", ok_label="Exit")
             return None
         elif len(devs) == 1:
             return devs[0][0]
@@ -125,14 +138,15 @@ class PyScanUi:
             elif code == Dialog.HELP:
                 self.d.msgbox("DIRECTORY HELP")
             else:
-                # Dialog was canceled; exit without changing the directory
+                # Menu was canceled; exit without changing the directory
                 break
 
     def setup_menu(self):
         choices = []
         if self.configs is not None:
             choices.append(('Config', 'Select scanning configuration'))
-        choices.append(('Format', 'Select output format'))
+        if self.formats is not None:
+            choices.append(('Format', 'Select output format'))
         choices.append(('Directory', 'Select output directory'))
 
         # After we change the appropriate setting, return to this menu
@@ -153,22 +167,39 @@ class PyScanUi:
                 # in pythondialog), recover by returning to the main screen
                 break
 
-    def config_to_text(self, width=80, indent=0):
-        output = "Output directory: {}".format(os.path.abspath(self.directory))
-        sfmt = "Format: {}".format(self.format["name"])
-        title = "Config: {}".format(self.config.get("name", "<none>"))
-        lines = [output, sfmt, '', '\Zb' + title + '\Zn', self.config.get("description", '')]
-        for k, v in self.config["settings"].items():
-            pad = width - indent - len(k) - len(str(v))
-            NBSP = '\u00a0'
-            lines.append(''.join((NBSP*indent, k.title(), '.'*pad, str(v))))
-        return '\n'.join(lines)
+    def option_summary(self, width=80, indent=0):
+        def bold(s):
+            # Dialog supports escape sequences to affect text formatting; these
+            # are introduced with \Z and followed with a letter or number.
+            # See dialog(1) for the full documentation.
+            return r'\Zb' + s + r'\Zn'
+
+        config_title = "Config: {}".format(self.config.get("name", "<none>"))
+        format_title = "Format: {}".format(self.format.get("name", "<none>"))
+        output_title = "Output directory: {}".format(self.directory)
+
+        config_description = self.config.get("description")
+        format_description = self.format.get("description")
+
+        config_lines = [config_description] if config_description else []
+        format_lines = [format_description, ""] if format_description else []
+
+        if "settings" in self.config:
+            for k, v in self.config["settings"].items():
+                pad = width - indent - len(k) - len(str(v))
+                config_lines.append(''.join(
+                    (PyScanUi.NBSP * indent, k.title(), '.' * pad, str(v))))
+            config_lines.append("")
+
+        return '\n'.join((bold(config_title), *config_lines,
+            bold(format_title), *format_lines, bold(output_title)))
 
     def main_menu(self):
-        text = self.config_to_text(width=42, indent=4)
+        text = self.option_summary(width=42, indent=4)
         code = self.d.yesno(text,
                 title="Main Menu", extra_button=True, height=15, width=50,
-                ok_label="Scan", extra_label="Options", cancel_label="Quit", colors=True)
+                ok_label="Scan", extra_label="Options", cancel_label="Quit",
+                colors=True)
         return code
 
     def do_scan(self):
@@ -206,6 +237,10 @@ class PyScanUi:
                 break
 
 
+class PyScanManager:
+    pass
+
+
 class PyScanConfig:
 
     DEFAULT_NAME = 'pyscan.toml'
@@ -231,7 +266,7 @@ class PyScanConfig:
                     config = PyScanConfig.parse_config(toml.load(f))
                 # Successfully loaded config
                 break
-            except FileNotFoundError as e:
+            except FileNotFoundError:
                 pass
         return config
 
