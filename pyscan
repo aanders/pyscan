@@ -2,8 +2,8 @@
 
 import argparse
 import datetime
-import glob
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -14,12 +14,14 @@ from dialog import Dialog
 
 import toml
 
-import mock_sane as sane
-from mock_pil import Image
+# import mock_sane as sane
+# from mock_pil import Image
 
-# from PIL import Image
+import sane
+from PIL import Image
 
-sane.MOCK_NUM_DEVICES = 1
+# sane.MOCK_NUM_DEVICES = 1
+
 class PyScanUi:
 
     VERSION = "0.1.0"
@@ -209,32 +211,46 @@ class PyScanUi:
         return code
 
     def do_scan(self):
-        filename = "Scan_{}.pdf".format(
-                datetime.datetime.now().strftime("%Y%m%d%H%M%S"))
 
-        for k, v in self.config.get("settings", dict()).items():
-            self.device[k] = v
-        with tempfile.TemporaryDirectory() as tmpdir:
-            i = 1
-            self.d.gauge_start("Scanning page {}".format(i))
-            for img in self.device.multi_scan():
-                img.save(os.path.join(tmpdir, "out{}.pnm".format(i)))
-                i += 1
-                self.d.gauge_update(i, text="Scanning page {}".format(i),
-                        update_text=True)
-            self.d.gauge_update(100, text="Saving scanned images",
-                    update_text=True)
-            # Collect the output files and combine into a single PDF
-            files = sorted(glob.iglob(os.path.join(tmpdir, "*.pnm")))
-            if self.config.get("rotate_first"):
-                with Image.open(files[0]) as img:
-                    img.transpose(Image.ROTATE_180).save(files[0],
-                                                       format=img.format)
-            # subprocess.run(('convert', '-density', '300', *files,
-            #                 os.path.join(self.directory, filename)), check=True)
-            header = "The following {} been written to disk:".format(
-                    "file has" if i == 1 else "files have")
-            self.d.msgbox('\n'.join((header, "", *files)))
+        self.d.infobox("Scanning in progress, please wait...")
+        mgr = PyScanManager(self.device, self.config, self.directory, self.format)
+        filenames = mgr.scan()
+
+
+
+        header = "The following {} been written to disk:".format(
+                "file has" if len(filenames) == 1 else "files have")
+        self.d.msgbox('\n'.join((header, "", *filenames)))
+        return
+
+        ################
+
+        # filename = "Scan_{}.pdf".format(
+        #         datetime.datetime.now().strftime("%Y%m%d%H%M%S"))
+
+        # for k, v in self.config.get("settings", dict()).items():
+        #     self.device[k] = v
+        # with tempfile.TemporaryDirectory() as tmpdir:
+        #     i = 1
+        #     self.d.gauge_start("Scanning page {}".format(i))
+        #     for img in self.device.multi_scan():
+        #         img.save(os.path.join(tmpdir, "out{}.pnm".format(i)))
+        #         i += 1
+        #         self.d.gauge_update(i, text="Scanning page {}".format(i),
+        #                 update_text=True)
+        #     self.d.gauge_update(100, text="Saving scanned images",
+        #             update_text=True)
+        #     # Collect the output files and combine into a single PDF
+        #     files = sorted(glob.iglob(os.path.join(tmpdir, "*.pnm")))
+        #     if self.config.get("rotate_first"):
+        #         with Image.open(files[0]) as img:
+        #             img.transpose(Image.ROTATE_180).save(files[0],
+        #                                                format=img.format)
+        #     # subprocess.run(('convert', '-density', '300', *files,
+        #     #                 os.path.join(self.directory, filename)), check=True)
+        #     header = "The following {} been written to disk:".format(
+        #             "file has" if i == 1 else "files have")
+        #     self.d.msgbox('\n'.join((header, "", *files)))
 
     def main_loop(self):
         while True:
@@ -248,7 +264,74 @@ class PyScanUi:
 
 
 class PyScanManager:
-    pass
+
+    # Number of digits in the filename number (e.g. 000001.ext)
+    DIGITS = 6
+
+    def __init__(self, device, config, directory, format):
+        self.device = device
+        self.config = config
+        self.directory = directory
+        self.format = format
+
+    def _get_next_filename(self):
+        max_filenum = 0
+        ext = self.format["extension"]
+        # Use %-formatting to avoid the need for escaping the braces
+        template = re.compile(
+                r'^([0-9]{%d})\.%s$' % (PyScanManager.DIGITS, re.escape(ext)))
+        for entry in os.scandir(self.directory):
+            m = template.match(entry.name)
+            if m is not None:
+                max_filenum = max(int(m.group(1)), max_filenum)
+
+        next_filenum =  str(max_filenum + 1).zfill(PyScanManager.DIGITS)
+        fname = "{}.{}".format(next_filenum, ext)
+        return os.path.join(self.directory, fname)
+
+    def scan(self):
+        settings = self.config.get("settings", dict())
+        images = []
+        for k, v in settings.items():
+            setattr(self.device, k, v)
+
+        # Collect all images in memory, avoids unnecessary filesystem I/O
+        for img in self.device.multi_scan():
+            images.append(img)
+
+        if not images:
+            return []
+
+        if self.config.get("rotate_first"):
+            images[0] = images[0].transpose(Image.ROTATE_180)
+
+        # Save to disk
+        filenames = []
+
+        save_kwargs = dict()
+        ext = self.format["extension"]
+        if ext == "pdf":
+            save_kwargs["resolution"] = settings.get("resolution", 300)
+
+        if self.format.get("collate"):
+            if ext == "pdf":
+                save_kwargs["save_all"] = True
+                save_kwargs["append_images"] = images[1:]
+            else:
+                # TODO: we can actually support GIF and TIFF as well, but
+                # these aren't a priority for now
+                raise TypeError("'collate' only supported on PDF format")
+
+            next_filename = self._get_next_filename()
+            images[0].save(next_filename, **save_kwargs)
+            filenames.append(next_filename)
+        else:
+            for img in images:
+                next_filename = self._get_next_filename()
+                img.save(next_filename, **save_kwargs)
+                filenames.append(next_filename)
+
+        return filenames
 
 
 class PyScanConfig:
