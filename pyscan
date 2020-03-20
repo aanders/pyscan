@@ -1,26 +1,16 @@
 #!/usr/bin/env python3
 
 import argparse
-import datetime
 import os
 import re
-import subprocess
 import sys
-import tempfile
-
-from inspect import cleandoc
 
 from dialog import Dialog
 
 import toml
 
-# import mock_sane as sane
-# from mock_pil import Image
-
 import sane
 from PIL import Image
-
-# sane.MOCK_NUM_DEVICES = 1
 
 class PyScanUi:
 
@@ -89,26 +79,28 @@ class PyScanUi:
             # Mark the first device selected by default
             choices = ((d[0], model_name(d), d[0] == devs[0][0]) for d in devs)
             code, name = self.d.radiolist("Select a scanner to use",
-                    choices=choices, height=10, width=72)
+                                          choices=choices, height=10, width=72)
             return name if code == Dialog.OK else None
 
     def change_config(self):
-        code, name = self.d.menu("Choose a configuration to load.\n\n"
-                "Arrow keys to move, <Space> or <Enter> to select.",
-                title="Select Configuration",
-                choices=((config.get("name"), config.get("description"))
-                    for config in self.configs),
-                menu_height=5, height=15, width=72)
+        code, name = self.d.menu(
+            "Choose a configuration to load.\n\n"
+            "Arrow keys to move, <Space> or <Enter> to select.",
+            title="Select Configuration",
+            choices=((config.get("name"), config.get("description"))
+                     for config in self.configs),
+            menu_height=5, height=15, width=72)
         if code == Dialog.OK:
             self.config = next(c for c in self.configs if c["name"] == name)
 
     def change_format(self):
-        code, name = self.d.menu("Choose an output format.\n\n"
-                "Arrow keys to move, <Space> or <Enter> to select.",
-                title="Select Output Format",
-                choices=((fmt["name"], fmt.get("description", ""))
-                    for fmt in self.formats),
-                menu_height=5, height=15, width=72)
+        code, name = self.d.menu(
+            "Choose an output format.\n\n"
+            "Arrow keys to move, <Space> or <Enter> to select.",
+            title="Select Output Format",
+            choices=((fmt["name"], fmt.get("description", ""))
+                     for fmt in self.formats),
+            menu_height=5, height=15, width=72)
         if code == Dialog.OK:
             self.format = next(f for f in self.formats if f["name"] == name)
 
@@ -129,7 +121,7 @@ class PyScanUi:
         path = os.path.abspath(self.directory)
         while True:
             code, path = self.d.dselect(path, title='Enter output directory',
-                    height=30, width=90, help_button=True)
+                                        height=30, width=90, help_button=True)
             if code == Dialog.OK:
                 abspath = os.path.abspath(path)
                 if os.path.isdir(abspath):
@@ -160,7 +152,7 @@ class PyScanUi:
         # After we change the appropriate setting, return to this menu
         while True:
             code, tag = self.d.menu("Setup Menu", choices=choices,
-                    ok_label="Select", cancel_label="Exit")
+                                    ok_label="Select", cancel_label="Exit")
             if code != Dialog.OK:
                 break # Done
 
@@ -200,14 +192,15 @@ class PyScanUi:
             config_lines.append("")
 
         return '\n'.join((bold(config_title), *config_lines,
-            bold(format_title), *format_lines, bold(output_title)))
+                          bold(format_title), *format_lines,
+                          bold(output_title)))
 
     def main_menu(self):
         text = self.option_summary(width=42, indent=4)
-        code = self.d.yesno(text,
-                title="Main Menu", extra_button=True, height=15, width=50,
-                ok_label="Scan", extra_label="Options", cancel_label="Quit",
-                colors=True)
+        code = self.d.yesno(text, title="Main Menu", extra_button=True,
+                            height=15, width=50, ok_label="Scan",
+                            extra_label="Options", cancel_label="Quit",
+                            colors=True)
         return code
 
     def do_scan(self):
@@ -216,41 +209,9 @@ class PyScanUi:
         mgr = PyScanManager(self.device, self.config, self.directory, self.format)
         filenames = mgr.scan()
 
-
-
         header = "The following {} been written to disk:".format(
-                "file has" if len(filenames) == 1 else "files have")
+            "file has" if len(filenames) == 1 else "files have")
         self.d.msgbox('\n'.join((header, "", *filenames)))
-        return
-
-        ################
-
-        # filename = "Scan_{}.pdf".format(
-        #         datetime.datetime.now().strftime("%Y%m%d%H%M%S"))
-
-        # for k, v in self.config.get("settings", dict()).items():
-        #     self.device[k] = v
-        # with tempfile.TemporaryDirectory() as tmpdir:
-        #     i = 1
-        #     self.d.gauge_start("Scanning page {}".format(i))
-        #     for img in self.device.multi_scan():
-        #         img.save(os.path.join(tmpdir, "out{}.pnm".format(i)))
-        #         i += 1
-        #         self.d.gauge_update(i, text="Scanning page {}".format(i),
-        #                 update_text=True)
-        #     self.d.gauge_update(100, text="Saving scanned images",
-        #             update_text=True)
-        #     # Collect the output files and combine into a single PDF
-        #     files = sorted(glob.iglob(os.path.join(tmpdir, "*.pnm")))
-        #     if self.config.get("rotate_first"):
-        #         with Image.open(files[0]) as img:
-        #             img.transpose(Image.ROTATE_180).save(files[0],
-        #                                                format=img.format)
-        #     # subprocess.run(('convert', '-density', '300', *files,
-        #     #                 os.path.join(self.directory, filename)), check=True)
-        #     header = "The following {} been written to disk:".format(
-        #             "file has" if i == 1 else "files have")
-        #     self.d.msgbox('\n'.join((header, "", *files)))
 
     def main_loop(self):
         while True:
@@ -279,13 +240,13 @@ class PyScanManager:
         ext = self.format["extension"]
         # Use %-formatting to avoid the need for escaping the braces
         template = re.compile(
-                r'^([0-9]{%d})\.%s$' % (PyScanManager.DIGITS, re.escape(ext)))
+            r'^([0-9]{%d})\.%s$' % (PyScanManager.DIGITS, re.escape(ext)))
         for entry in os.scandir(self.directory):
             m = template.match(entry.name)
             if m is not None:
                 max_filenum = max(int(m.group(1)), max_filenum)
 
-        next_filenum =  str(max_filenum + 1).zfill(PyScanManager.DIGITS)
+        next_filenum = str(max_filenum + 1).zfill(PyScanManager.DIGITS)
         fname = "{}.{}".format(next_filenum, ext)
         return os.path.join(self.directory, fname)
 
@@ -368,7 +329,7 @@ class PyScanConfig:
     def load_from_file(cls, filename):
         path = os.path.dirname(os.path.abspath(filename))
         name = os.path.basename(filename)
-        config = PaperlessUtilsConfig.load_config(path=(path,), name=name)
+        config = PyScanConfig.load_config(path=(path,), name=name)
         if config is None:
             raise FileNotFoundError(filename)
         return config
@@ -379,7 +340,7 @@ class PyScanArgs:
     def __init__(self):
         self.parser = argparse.ArgumentParser()
         self.parser.add_argument('--config', '-c', dest='conffile',
-                help="Use an alternate config file")
+                                 help="Use an alternate config file")
 
     def parse(self, argv):
         return self.parser.parse_args(args=argv)
