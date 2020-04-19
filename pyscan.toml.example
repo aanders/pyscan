@@ -1,0 +1,65 @@
+# PyScan Definitions
+
+# Output Formats
+
+[[format]]
+name = "PDF (single)"
+description = "Create a single PDF from all pages"
+extension = 'pdf'
+collate = true
+
+[[format]]
+name = "PDF (multiple)"
+description = "Create a separate PDF for each page"
+extension = 'pdf'
+collate = false
+
+[[format]]
+name = "PNM"
+description = "Portable grayscale/color map"
+extension = 'pnm'
+
+# Scanner Configurations
+
+[[scan_config]]
+name = "Receipt"
+description = "Single side, high contrast grayscale"
+# 'scan_config.settings' contains the actual scanner config values.  The keys
+# should match the names of the scanner options exposed by SANE.
+[scan_config.settings]
+contrast = 64
+source = "ADF Front"
+mode = "Gray"
+
+[[scan_config]]
+name = "Receipt (X-hi contrast)"
+description = "Single side, extra-high contrast grayscale"
+[scan_config.settings]
+contrast = 110
+source = "ADF Front"
+mode = "Gray"
+
+[[scan_config]]
+name = "Receipt (long)"
+description = "Both sides (front is rotated 180°)"
+rotate_first = true
+[scan_config.settings]
+contrast = 64
+source = "ADF Duplex"
+mode = "Gray"
+
+[[scan_config]]
+name = "Document (2-sided)"
+description = "Double-sided color document"
+[scan_config.settings]
+source = "ADF Duplex"
+mode = "Color"
+contrast = 32
+
+[[scan_config]]
+name = "Document (1-sided)"
+description = "Single-sided color document"
+[scan_config.settings]
+source = "ADF Front"
+mode = "Color"
+contrast = 32
